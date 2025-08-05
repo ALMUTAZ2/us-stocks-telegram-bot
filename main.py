@@ -4,17 +4,16 @@ import os
 import sys
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from aiogram import Bot
 from aiogram.types import FSInputFile
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # إعداد التسجيل
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # قراءة إعدادات تليجرام من متغيرات البيئة
@@ -63,9 +62,7 @@ def setup_chrome_driver():
     chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
     try:
-        # استخدام ChromeDriver المثبت مسبقاً
-        service = Service('/usr/local/bin/chromedriver')
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver = webdriver.Chrome(options=chrome_options)
         
         # إخفاء أتمتة المتصفح
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -76,7 +73,7 @@ def setup_chrome_driver():
         logger.error(f"❌ خطأ في إعداد Chrome: {e}")
         sys.exit(1)
 
-# قائمة أسهم مبسطة للاختبار
+# الأسهم الأمريكية المطلوبة
 STOCKS = [
     {"symbol": "AAPL", "name": "Apple Inc", "sector": "Technology"},
     {"symbol": "MSFT", "name": "Microsoft Corporation", "sector": "Technology"},
@@ -84,7 +81,33 @@ STOCKS = [
     {"symbol": "AMZN", "name": "Amazon.com Inc", "sector": "E-commerce"},
     {"symbol": "TSLA", "name": "Tesla Inc", "sector": "Electric Vehicles"},
     {"symbol": "META", "name": "Meta Platforms Inc", "sector": "Social Media"},
-    {"symbol": "NVDA", "name": "NVIDIA Corporation", "sector": "Semiconductors"}
+    {"symbol": "NVDA", "name": "NVIDIA Corporation", "sector": "Semiconductors"},
+    {"symbol": "NFLX", "name": "Netflix Inc", "sector": "Entertainment"},
+    {"symbol": "BABA", "name": "Alibaba Group", "sector": "E-commerce"},
+    {"symbol": "V", "name": "Visa Inc", "sector": "Financial Services"},
+    {"symbol": "JPM", "name": "JPMorgan Chase", "sector": "Banking"},
+    {"symbol": "JNJ", "name": "Johnson & Johnson", "sector": "Healthcare"},
+    {"symbol": "WMT", "name": "Walmart Inc", "sector": "Retail"},
+    {"symbol": "PG", "name": "Procter & Gamble", "sector": "Consumer Goods"},
+    {"symbol": "UNH", "name": "UnitedHealth Group", "sector": "Healthcare"},
+    {"symbol": "HD", "name": "The Home Depot", "sector": "Retail"},
+    {"symbol": "MA", "name": "Mastercard Inc", "sector": "Financial Services"},
+    {"symbol": "BAC", "name": "Bank of America", "sector": "Banking"},
+    {"symbol": "DIS", "name": "The Walt Disney Company", "sector": "Entertainment"},
+    {"symbol": "ADBE", "name": "Adobe Inc", "sector": "Software"},
+    {"symbol": "CRM", "name": "Salesforce Inc", "sector": "Software"},
+    {"symbol": "XOM", "name": "Exxon Mobil Corporation", "sector": "Energy"},
+    {"symbol": "VZ", "name": "Verizon Communications", "sector": "Telecommunications"},
+    {"symbol": "KO", "name": "The Coca-Cola Company", "sector": "Beverages"},
+    {"symbol": "PFE", "name": "Pfizer Inc", "sector": "Pharmaceuticals"},
+    {"symbol": "INTC", "name": "Intel Corporation", "sector": "Semiconductors"},
+    {"symbol": "CSCO", "name": "Cisco Systems", "sector": "Networking"},
+    {"symbol": "ABT", "name": "Abbott Laboratories", "sector": "Healthcare"},
+    {"symbol": "TMO", "name": "Thermo Fisher Scientific", "sector": "Life Sciences"},
+    {"symbol": "COST", "name": "Costco Wholesale", "sector": "Retail"},
+    {"symbol": "AVGO", "name": "Broadcom Inc", "sector": "Semiconductors"},
+    {"symbol": "ACN", "name": "Accenture plc", "sector": "Consulting"},
+    {"symbol": "LLY", "name": "Eli Lilly and Company", "sector": "Pharmaceuticals"}
 ]
 
 async def capture_tradingview_chart(stock_info, driver):
@@ -93,45 +116,60 @@ async def capture_tradingview_chart(stock_info, driver):
     name = stock_info["name"]
     sector = stock_info["sector"]
     
+    # بدء قياس الوقت للسهم الواحد
     chart_start_time = time.time()
+    
     logger.info(f"📈 معالجة {name} ({symbol})...")
     
     try:
-        # رابط TradingView مع إعدادات محددة
-        url = f"https://www.tradingview.com/chart/?symbol=NASDAQ%3A{symbol}&interval=1M&style=1&theme=dark&hide_side_toolbar=1&hide_top_toolbar=1&hide_legend=1"
+        # بناء رابط TradingView مع الثيم الداكن للأسهم الأمريكية
+        url = f"https://www.tradingview.com/chart/?symbol=NASDAQ%3A{symbol}&interval=1M&style=4&theme=dark"
         
         logger.info(f"🌐 الذهاب إلى: {url}")
         driver.get(url)
         
         # انتظار تحميل الصفحة
         logger.info("⏳ انتظار تحميل الشارت...")
-        
-        try:
-            # انتظار ظهور الشارت
-            wait = WebDriverWait(driver, 30)
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[data-name='legend-source-item']")))
-            logger.info("📊 تم تحميل الشارت بنجاح")
-        except:
-            logger.warning("⚠️ لم يتم العثور على عنصر الشارت، المتابعة بأخذ لقطة شاشة")
-        
-        # انتظار إضافي للتأكد من التحميل
-        time.sleep(10)
+        time.sleep(20)  # انتظار أطول للتأكد من التحميل
         
         # أخذ لقطة شاشة
         file_name = f"{symbol}_chart.png"
-        driver.save_screenshot(file_name)
+        
+        try:
+            # محاولة العثور على منطقة الشارت
+            wait = WebDriverWait(driver, 15)
+            chart_area = wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".layout__area--center"))
+            )
+            
+            # أخذ لقطة شاشة للشارت فقط
+            chart_area.screenshot(file_name)
+            logger.info(f"📸 تم التقاط شارت {symbol}")
+            
+        except Exception as e:
+            logger.warning(f"⚠️ فشل في العثور على الشارت، أخذ لقطة شاشة كاملة: {e}")
+            driver.save_screenshot(file_name)
         
         # التحقق من وجود الملف
-        if os.path.exists(file_name) and os.path.getsize(file_name) > 5000:  # حجم أكبر للتأكد
+        if os.path.exists(file_name) and os.path.getsize(file_name) > 1000:
+            # إرسال الصورة
             photo = FSInputFile(file_name)
+            
+            # حساب الوقت المستغرق لهذا السهم
             chart_duration = time.time() - chart_start_time
             
-            # إرسال الصورة مع معلومات
+            # إرسال رسالة نصية أولاً
+            await bot.send_message(
+                chat_id=TELEGRAM_CHAT_ID,
+                text=f"📊 **شارت {name} ({symbol})**\n🏢 القطاع: {sector}\n🔗 TradingView\n📅 {time.strftime('%Y-%m-%d %H:%M UTC')}\n⏱️ وقت المعالجة: {format_duration(chart_duration)}",
+                parse_mode="Markdown"
+            )
+            
+            # إرسال الصورة
             await bot.send_photo(
                 chat_id=TELEGRAM_CHAT_ID,
                 photo=photo,
-                caption=f"📊 **{name} ({symbol})**\n🏢 القطاع: {sector}\n📅 {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}\n⏱️ وقت المعالجة: {format_duration(chart_duration)}",
-                parse_mode="Markdown"
+                caption=f"📈 {name} ({symbol}) - {sector}"
             )
             
             # حذف الملف
@@ -150,33 +188,70 @@ async def capture_tradingview_chart(stock_info, driver):
         return False, chart_duration
 
 async def send_summary_message(successful_charts, total_duration, chart_durations):
-    """إرسال رسالة ملخص"""
+    """إرسال رسالة ملخص شهرية"""
     try:
         total_stocks = len(STOCKS)
         success_count = len(successful_charts)
         
-        # حساب متوسط الوقت
-        avg_time = sum(chart_durations) / len(chart_durations) if chart_durations else 0
+        current_date = datetime.now()
+        month_names = {
+            1: "يناير", 2: "فبراير", 3: "مارس", 4: "أبريل",
+            5: "مايو", 6: "يونيو", 7: "يوليو", 8: "أغسطس",
+            9: "سبتمبر", 10: "أكتوبر", 11: "نوفمبر", 12: "ديسمبر"
+        }
+        current_month = month_names[current_date.month]
+        current_year = current_date.year
         
-        # تجميع الأسهم الناجحة
-        successful_stocks = "\n".join([f"• {stock['name']} ({stock['symbol']})" for stock in successful_charts])
+        next_month_num = current_date.month + 1 if current_date.month < 12 else 1
+        next_year = current_year if current_date.month < 12 else current_year + 1
+        next_month = month_names[next_month_num]
+        
+        # حساب متوسط الوقت لكل سهم
+        avg_time_per_chart = sum(chart_durations) / len(chart_durations) if chart_durations else 0
+        
+        # تجميع الأسهم حسب القطاع
+        sectors = {}
+        for stock in successful_charts:
+            sector = stock['sector']
+            if sector not in sectors:
+                sectors[sector] = []
+            sectors[sector].append(f"{stock['name']} ({stock['symbol']})")
+        
+        sectors_summary = ""
+        for sector, stocks in sectors.items():
+            sectors_summary += f"\n🏢 **{sector}:**\n"
+            for stock in stocks:
+                sectors_summary += f"  • {stock}\n"
         
         summary = f"""
-🇺🇸 **تقرير الأسهم الأمريكية**
+🇺🇸 **التقرير الشهري - بوت الأسهم الأمريكية**
+📅 الشهر: {current_month} {current_year}
+🕒 التاريخ والوقت: {time.strftime('%Y-%m-%d %H:%M UTC')}
 
-📊 النتائج:
+📊 **نتائج هذا الشهر:**
 ✅ نجح: {success_count}/{total_stocks}
 ❌ فشل: {total_stocks - success_count}/{total_stocks}
 
-⏱️ إحصائيات الوقت:
-• الوقت الإجمالي: {format_duration(total_duration)}
-• متوسط الوقت لكل سهم: {format_duration(avg_time)}
+⏱️ **إحصائيات الوقت:**
+🕐 إجمالي الوقت المستغرق: {format_duration(total_duration)}
+📈 متوسط الوقت لكل شارت: {format_duration(avg_time_per_chart)}
+⚡ أسرع شارت: {format_duration(min(chart_durations)) if chart_durations else "غير متاح"}
+🐌 أبطأ شارت: {format_duration(max(chart_durations)) if chart_durations else "غير متاح"}
 
-✅ الأسهم المُرسلة:
-{successful_stocks}
+✅ **الشارتات المُرسلة حسب القطاع:**{sectors_summary}
 
-🕒 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}
-🤖 المصدر: GitHub Actions Bot
+📈 **معلومات إضافية:**
+• المصدر: TradingView
+• البورصة: NASDAQ/NYSE
+• الإطار الزمني: 1 شهر
+• نوع الشارت: Renko
+
+🔄 **الموعد القادم:** 
+📅 أول يوم من شهر {next_month} {next_year}
+🕒 الساعة 3:00 صباحاً (UTC)
+
+🤖 **المصدر:** GitHub Actions Bot
+💡 **حالة البوت:** نشط ويعمل تلقائياً
         """.strip()
         
         await bot.send_message(
@@ -185,30 +260,108 @@ async def send_summary_message(successful_charts, total_duration, chart_duration
             parse_mode="Markdown"
         )
         
-        logger.info("📋 تم إرسال ملخص التقرير")
+        logger.info("📋 تم إرسال ملخص التقرير الشهري")
         
     except Exception as e:
         logger.error(f"❌ خطأ في إرسال الملخص: {e}")
 
-async def main():
-    """الدالة الرئيسية"""
-    total_start_time = time.time()
-    
-    logger.info("🇺🇸 بدء تشغيل بوت الأسهم...")
-    
-    # إرسال رسالة البداية
+async def send_monthly_greeting():
+    """إرسال رسالة ترحيب شهرية"""
     try:
+        current_date = datetime.now()
+        month_names = {
+            1: "يناير", 2: "فبراير", 3: "مارس", 4: "أبريل",
+            5: "مايو", 6: "يونيو", 7: "يوليو", 8: "أغسطس",
+            9: "سبتمبر", 10: "أكتوبر", 11: "نوفمبر", 12: "ديسمبر"
+        }
+        current_month = month_names[current_date.month]
+        current_year = current_date.year
+        
+        # تقدير الوقت المتوقع (حوالي 45 ثانية لكل سهم)
+        estimated_time = len(STOCKS) * 45  # ثانية
+        estimated_duration = format_duration(estimated_time)
+        
+        greeting = f"""
+🚀 **مرحباً بك في التقرير الشهري للأسهم الأمريكية!**
+
+📅 **{current_month} {current_year}**
+🕒 بدء التشغيل: {time.strftime('%Y-%m-%d %H:%M UTC')}
+
+📊 **ما سيتم عمله:**
+• تصوير شارتات الأسهم الأمريكية على فريم شهري رينكو وإرساله على التليجرام بشكل شهري
+• عدد الأسهم: {len(STOCKS)} سهم أمريكي
+• الوقت المتوقع للإنتهاء: {estimated_duration}
+
+🏢 **القطاعات المشمولة:**
+• التكنولوجيا والبرمجيات
+• الخدمات المالية والمصرفية
+• الرعاية الصحية والأدوية
+• التجارة الإلكترونية والتجزئة
+• الطاقة والاتصالات
+• وأكثر...
+
+⏳ **جاري المعالجة...**
+يرجى الانتظار بينما نجلب أحدث الشارتات لك
+        """.strip()
+        
         await bot.send_message(
             chat_id=TELEGRAM_CHAT_ID,
-            text=f"🚀 **بدء تقرير الأسهم الأمريكية**\n📊 عدد الأسهم: {len(STOCKS)}\n⏳ جاري المعالجة...",
+            text=greeting,
             parse_mode="Markdown"
         )
+        
+        logger.info("👋 تم إرسال رسالة الترحيب الشهرية")
+        
     except Exception as e:
-        logger.error(f"خطأ في إرسال رسالة البداية: {e}")
+        logger.error(f"❌ خطأ في إرسال رسالة الترحيب: {e}")
+
+async def send_progress_update(current_index, total_stocks, elapsed_time, successful_count, failed_count):
+    """إرسال تحديث التقدم كل 10 أسهم"""
+    try:
+        progress_percentage = (current_index / total_stocks) * 100
+        avg_time_per_stock = elapsed_time / current_index if current_index > 0 else 0
+        remaining_stocks = total_stocks - current_index
+        estimated_remaining_time = remaining_stocks * avg_time_per_stock
+        
+        progress_message = f"""
+📊 **تحديث التقدم - الأسهم الأمريكية**
+
+🔄 **الحالة الحالية:**
+• تم إنجاز: {current_index}/{total_stocks} ({progress_percentage:.1f}%)
+• نجح: {successful_count} | فشل: {failed_count}
+
+⏱️ **إحصائيات الوقت:**
+• الوقت المنقضي: {format_duration(elapsed_time)}
+• متوسط الوقت لكل سهم: {format_duration(avg_time_per_stock)}
+• الوقت المتبقي المتوقع: {format_duration(estimated_remaining_time)}
+
+🚀 **التقدم:** {"█" * int(progress_percentage // 5)}{"░" * (20 - int(progress_percentage // 5))} {progress_percentage:.1f}%
+        """.strip()
+        
+        await bot.send_message(
+            chat_id=TELEGRAM_CHAT_ID,
+            text=progress_message,
+            parse_mode="Markdown"
+        )
+        
+        logger.info(f"📊 تم إرسال تحديث التقدم: {current_index}/{total_stocks}")
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ في إرسال تحديث التقدم: {e}")
+
+async def main():
+    """الدالة الرئيسية"""
+    # بدء قياس الوقت الإجمالي
+    total_start_time = time.time()
+    
+    logger.info("🚀 بدء تشغيل بوت الأسهم الأمريكية الشهري...")
+    
+    await send_monthly_greeting()
     
     driver = setup_chrome_driver()
     successful_charts = []
-    chart_durations = []
+    failed_charts = []
+    chart_durations = []  # لحفظ أوقات كل شارت
     
     try:
         for i, stock_info in enumerate(STOCKS):
@@ -219,43 +372,81 @@ async def main():
             
             if success:
                 successful_charts.append(stock_info)
+            else:
+                failed_charts.append(stock_info)
             
-            # انتظار بين الأسهم لتجنب الحظر
+            # إرسال تحديث التقدم كل 10 أسهم
+            if (i + 1) % 10 == 0 or (i + 1) == len(STOCKS):
+                elapsed_time = time.time() - total_start_time
+                await send_progress_update(
+                    i + 1, 
+                    len(STOCKS), 
+                    elapsed_time, 
+                    len(successful_charts), 
+                    len(failed_charts)
+                )
+            
             if i < len(STOCKS) - 1:
                 logger.info("⏳ انتظار بين الأسهم...")
-                time.sleep(8)
+                time.sleep(10)
         
-        # إرسال الملخص
+        # حساب الوقت الإجمالي
         total_duration = time.time() - total_start_time
+        
         await send_summary_message(successful_charts, total_duration, chart_durations)
         
+        if failed_charts:
+            failed_list = "\n".join([f"• {info['name']} ({info['symbol']}) - {info['sector']}" for info in failed_charts])
+            await bot.send_message(
+                chat_id=TELEGRAM_CHAT_ID,
+                text=f"⚠️ **الأسهم التي فشل في معالجتها:**\n{failed_list}\n\n🔧 سيتم إعادة المحاولة في التقرير القادم",
+                parse_mode="Markdown"
+            )
+                
     except Exception as e:
+        total_duration = time.time() - total_start_time
         logger.error(f"❌ خطأ عام: {e}")
         
         try:
+            error_message = f"""
+❌ **خطأ في بوت الأسهم الأمريكية الشهري**
+
+🕒 الوقت: {time.strftime('%Y-%m-%d %H:%M UTC')}
+⏱️ الوقت المنقضي قبل الخطأ: {format_duration(total_duration)}
+📋 تفاصيل الخطأ:
+
+{str(e)}
+
+🔧 **الإجراءات:**
+• سيتم إعادة المحاولة في الموعد القادم
+• تحقق من حالة GitHub Actions
+• راجع سجلات الأخطاء للمزيد من التفاصيل
+            """.strip()
+            
             await bot.send_message(
                 chat_id=TELEGRAM_CHAT_ID,
-                text=f"❌ **خطأ في بوت الأسهم**\n\n```\n{str(e)}\n```",
+                text=error_message,
                 parse_mode="Markdown"
             )
         except:
             logger.error("فشل في إرسال رسالة الخطأ")
-    
+        
     finally:
         try:
             driver.quit()
             logger.info("🔒 تم إغلاق Chrome Driver")
         except:
-            pass
+            logger.warning("⚠️ خطأ في إغلاق Driver")
             
         try:
             await bot.session.close()
             logger.info("🔒 تم إغلاق جلسة البوت")
         except:
-            pass
+            logger.warning("⚠️ خطأ في إغلاق جلسة البوت")
         
-        final_duration = time.time() - total_start_time
-        logger.info(f"🏁 انتهى التشغيل - الوقت الإجمالي: {format_duration(final_duration)}")
+        # حساب وعرض الوقت الإجمالي النهائي
+        final_total_duration = time.time() - total_start_time
+        logger.info(f"🏁 انتهى التشغيل الشهري - الوقت الإجمالي: {format_duration(final_total_duration)}")
 
 if __name__ == "__main__":
     asyncio.run(main())
