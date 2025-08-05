@@ -1,4 +1,4 @@
-name: Monthly Report
+name: Monthly US Stocks Report
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:  # تشغيل يدوي
 
 jobs:
-  stocks-report:
+  us-stocks-report:
     runs-on: ubuntu-latest
     
     steps:
@@ -18,7 +18,7 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Setup Chrome and ChromeDriver
+    - name: Setup Chrome and ChromeDriver (الطريقة الجديدة)
       run: |
         # تثبيت Google Chrome
         wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
@@ -26,29 +26,70 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y google-chrome-stable
         
-        # تحديد إصدار Chrome
-        CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1-3)
+        # الحصول على إصدار Chrome المثبت
+        CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
         echo "Chrome version: $CHROME_VERSION"
         
-        # تحميل ChromeDriver المتوافق
-        CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
+        # تحميل ChromeDriver من الموقع الجديد
+        # استخدام Chrome for Testing API
+        CHROMEDRIVER_URL="https://googlechromelabs.github.io/chrome-for-testing/latest-patch-versions-per-build-with-downloads.json"
+        
+        # البحث عن أحدث إصدار متوافق
+        MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1)
+        echo "Chrome major version: $MAJOR_VERSION"
+        
+        # تحميل ChromeDriver مباشرة من المستودع الجديد
+        if [ "$MAJOR_VERSION" -ge "115" ]; then
+          # للإصدارات الجديدة (115+)
+          CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_$MAJOR_VERSION")
+          if [ -z "$CHROMEDRIVER_VERSION" ]; then
+            # إذا لم نجد الإصدار المحدد، استخدم أحدث إصدار مستقر
+            CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_STABLE")
+          fi
+          DOWNLOAD_URL="https://storage.googleapis.com/chrome-for-testing-public/$CHROMEDRIVER_VERSION/linux64/chromedriver-linux64.zip"
+        else
+          # للإصدارات الأقدم، استخدم الطريقة القديمة إن أمكن
+          CHROMEDRIVER_VERSION="114.0.5735.90"
+          DOWNLOAD_URL="https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
+        fi
+        
         echo "ChromeDriver version: $CHROMEDRIVER_VERSION"
+        echo "Download URL: $DOWNLOAD_URL"
         
         # تحميل وتثبيت ChromeDriver
-        wget -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
-        sudo unzip /tmp/chromedriver.zip -d /usr/local/bin/
+        wget -O /tmp/chromedriver.zip "$DOWNLOAD_URL"
+        
+        # فك الضغط
+        cd /tmp
+        unzip chromedriver.zip
+        
+        # نقل الملف إلى المكان الصحيح
+        if [ -f "chromedriver-linux64/chromedriver" ]; then
+          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
+        elif [ -f "chromedriver" ]; then
+          sudo mv chromedriver /usr/local/bin/chromedriver
+        else
+          echo "ChromeDriver file not found after extraction"
+          ls -la /tmp/
+          exit 1
+        fi
+        
+        # إعطاء صلاحيات التنفيذ
         sudo chmod +x /usr/local/bin/chromedriver
         
         # التحقق من التثبيت
-        chromedriver --version
+        /usr/local/bin/chromedriver --version
         google-chrome --version
+        
+        # تنظيف الملفات المؤقتة
+        rm -rf /tmp/chromedriver*
     
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Generate and send report
+    - name: Generate and send US stocks report
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
