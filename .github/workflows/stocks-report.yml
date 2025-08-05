@@ -3,42 +3,30 @@ name: US Stocks Monthly Report
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 21 * * 0'  # كل أحد الساعة 9 مساءً بتوقيت الرياض
+    - cron: '0 21 * * 0'
 
 jobs:
   stocks-report:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
+    - name: 📥 Checkout repository
       uses: actions/checkout@v4
       
-    - name: Set up Python
+    - name: 🐍 Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
+        cache: 'pip'
         
-    - name: Install dependencies
+    - name: 📦 Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: Run stocks report
+    - name: 🚀 Generate and send report
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
         python main.py
-        
-    # ✅ تحديث إلى v4 بدلاً من v3
-    - name: Upload report artifacts
-      uses: actions/upload-artifact@v4  # ← التحديث هنا
-      if: always()
-      with:
-        name: stocks-report
-        path: |
-          *.png
-          *.jpg
-          *.pdf
-          logs/
-        retention-days: 30
