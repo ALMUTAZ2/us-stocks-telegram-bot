@@ -1,109 +1,242 @@
-import asyncio
-import time
 import os
 import sys
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from aiogram import Bot
-from aiogram.types import FSInputFile
+import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
+import yfinance as yf
+import pandas as pd
+from aiogram import Bot
+from aiogram.types import InputFile
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # إعداد التسجيل
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-# قراءة إعدادات تليجرام من متغيرات البيئة أو القيم المباشرة
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7762932301:AAHkbmxRKhvjeKV9uJNfh8t382cO0Ty7i2M")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "521974594")
+# قراءة متغيرات البيئة
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# التحقق من وجود البيانات
-if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-    logger.error("❌ بيانات تليجرام غير مضبوطة!")
+# التحقق من البيانات المطلوبة
+if not TELEGRAM_BOT_TOKEN:
+    logger.error("❌ TELEGRAM_BOT_TOKEN غير موجود!")
+    sys.exit(1)
+    
+if not TELEGRAM_CHAT_ID:
+    logger.error("❌ TELEGRAM_CHAT_ID غير موجود!")
     sys.exit(1)
 
-# إعداد البوت
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
+logger.info("✅ تم تحميل بيانات تليجرام بنجاح")
 
-def format_duration(seconds):
-    """تحويل الثواني إلى تنسيق مقروء"""
-    if seconds < 60:
-        return f"{seconds:.1f} ثانية"
-    elif seconds < 3600:
-        minutes = seconds / 60
-        return f"{minutes:.1f} دقيقة"
-    else:
-        hours = seconds / 3600
-        minutes = (seconds % 3600) / 60
-        return f"{hours:.1f} ساعة و {minutes:.0f} دقيقة"
+# قائمة الأسهم الأمريكية
+US_STOCKS = [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA',
+    'META', 'NVDA', 'NFLX', 'AMD', 'INTC'
+]
 
-def setup_chrome_driver():
-    """إعداد Chrome Driver لـ GitHub Actions"""
-    logger.info("🔧 إعداد Chrome Driver...")
-    
-    chrome_options = Options()
-    
-    # إعدادات ضرورية لـ GitHub Actions
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-plugins")
-    chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+async def get_stock_data():
+    """جلب بيانات الأسهم"""
+    try:
+        logger.info("🔄 جاري جلب بيانات الأسهم...")
+        
+        stock_data = []
+        for symbol in US_STOCKS:
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                hist = ticker.history(period="1mo")
+                
+                if not hist.empty:
+                    current_price = hist['Close'].iloc[-1]
+                    monthly_change = ((current_price - hist['Close'].iloc[0]) / hist['Close'].iloc[0]) * 100
+                    
+                    stock_data.append({
+                        'Symbol': symbol,
+                        'Name': info.get('longName', symbol),
+                        'Price': current_price,
+                        'Monthly_Change': monthly_change,
+                        'Market_Cap': info.get('marketCap', 0)
+                    })
+                    logger.info(f"✅ تم جلب بيانات {symbol}")
+                else:
+                    logger.warning(f"⚠️ لا توجد بيانات لـ {symbol}")
+                    
+            except Exception as e:
+                logger.error(f"❌ خطأ في جلب بيانات {symbol}: {e}")
+                continue
+        
+        if not stock_data:
+            raise Exception("لم يتم جلب أي بيانات للأسهم")
+            
+        logger.info(f"✅ تم جلب بيانات {len(stock_data)} سهم")
+        return pd.DataFrame(stock_data)
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ في جلب البيانات: {e}")
+        raise
+
+def create_chart(df):
+    """إنشاء مخطط بياني"""
+    try:
+        logger.info("📊 جاري إنشاء المخطط البياني...")
+        
+        plt.style.use('dark_background')
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+        
+        # مخطط الأداء الشهري
+        colors = ['green' if x > 0 else 'red' for x in df['Monthly_Change']]
+        ax1.bar(df['Symbol'], df['Monthly_Change'], color=colors, alpha=0.7)
+        ax1.set_title('الأداء الشهري للأسهم الأمريكية (%)', fontsize=16, pad=20)
+        ax1.set_ylabel('نسبة التغيير (%)')
+        ax1.grid(True, alpha=0.3)
+        ax1.axhline(y=0, color='white', linestyle='-', alpha=0.5)
+        
+        # مخطط الأسعار
+        ax2.bar(df['Symbol'], df['Price'], color='skyblue', alpha=0.7)
+        ax2.set_title('أسعار الأسهم الحالية ($)', fontsize=16, pad=20)
+        ax2.set_ylabel('السعر ($)')
+        ax2.set_xlabel('رمز السهم')
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        chart_path = 'stocks_chart.png'
+        plt.savefig(chart_path, dpi=300, bbox_inches='tight', 
+                   facecolor='black', edgecolor='none')
+        plt.close()
+        
+        logger.info(f"✅ تم إنشاء المخطط: {chart_path}")
+        return chart_path
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ في إنشاء المخطط: {e}")
+        return None
+
+def create_report_text(df):
+    """إنشاء نص التقرير"""
+    try:
+        logger.info("📝 جاري إنشاء نص التقرير...")
+        
+        # ترتيب حسب الأداء
+        df_sorted = df.sort_values('Monthly_Change', ascending=False)
+        
+        report = f"""
+📊 **تقرير الأسهم الأمريكية الشهري**
+📅 التاريخ: {datetime.now().strftime('%Y-%m-%d')}
+🕐 الوقت: {datetime.now().strftime('%H:%M')} بتوقيت الرياض
+
+🏆 **أفضل 3 أسهم أداءً:**
+"""
+        
+        # أفضل 3 أسهم
+        for i, (_, row) in enumerate(df_sorted.head(3).iterrows(), 1):
+            report += f"{i}. **{row['Symbol']}** ({row['Name'][:20]}...)\n"
+            report += f"   💰 السعر: ${row['Price']:.2f}\n"
+            report += f"   📈 التغيير: {row['Monthly_Change']:+.2f}%\n\n"
+        
+        report += "📉 **أسوأ 3 أسهم أداءً:**\n"
+        
+        # أسوأ 3 أسهم
+        for i, (_, row) in enumerate(df_sorted.tail(3).iterrows(), 1):
+            report += f"{i}. **{row['Symbol']}** ({row['Name'][:20]}...)\n"
+            report += f"   💰 السعر: ${row['Price']:.2f}\n"
+            report += f"   📉 التغيير: {row['Monthly_Change']:+.2f}%\n\n"
+        
+        # إحصائيات عامة
+        avg_change = df['Monthly_Change'].mean()
+        positive_count = len(df[df['Monthly_Change'] > 0])
+        negative_count = len(df[df['Monthly_Change'] < 0])
+        
+        report += f"""
+📊 **إحصائيات عامة:**
+• متوسط التغيير: {avg_change:.2f}%
+• أسهم إيجابية: {positive_count} سهم
+• أسهم سلبية: {negative_count} سهم
+• إجمالي الأسهم: {len(df)} سهم
+
+🤖 تم إنتاج هذا التقرير تلقائياً
+"""
+        
+        logger.info("✅ تم إنشاء نص التقرير")
+        return report
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ في إنشاء التقرير: {e}")
+        return "❌ خطأ في إنشاء التقرير"
+
+async def send_telegram_report(report_text, chart_path=None):
+    """إرسال التقرير عبر تليجرام"""
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
     
     try:
-        driver = webdriver.Chrome(options=chrome_options)
-        logger.info("✅ تم إعداد Chrome Driver بنجاح")
-        return driver
+        logger.info("📤 جاري إرسال التقرير عبر تليجرام...")
+        
+        # إرسال النص
+        await bot.send_message(
+            chat_id=TELEGRAM_CHAT_ID,
+            text=report_text,
+            parse_mode='Markdown'
+        )
+        logger.info("✅ تم إرسال النص")
+        
+        # إرسال المخطط إذا كان متوفراً
+        if chart_path and os.path.exists(chart_path):
+            with open(chart_path, 'rb') as photo:
+                await bot.send_photo(
+                    chat_id=TELEGRAM_CHAT_ID,
+                    photo=photo,
+                    caption="📊 مخطط الأداء الشهري للأسهم الأمريكية"
+                )
+            logger.info("✅ تم إرسال المخطط")
+        
+        logger.info("🎉 تم إرسال التقرير كاملاً!")
+        
     except Exception as e:
-        logger.error(f"❌ خطأ في إعداد Chrome: {e}")
+        logger.error(f"❌ خطأ في إرسال التقرير: {e}")
+        raise
+    finally:
+        await bot.session.close()
+
+async def main():
+    """الدالة الرئيسية"""
+    try:
+        logger.info("🚀 بدء تشغيل تقرير الأسهم...")
+        
+        # جلب البيانات
+        df = await get_stock_data()
+        
+        # إنشاء التقرير
+        report_text = create_report_text(df)
+        
+        # إنشاء المخطط
+        chart_path = create_chart(df)
+        
+        # إرسال التقرير
+        await send_telegram_report(report_text, chart_path)
+        
+        logger.info("✅ تم إنجاز التقرير بنجاح!")
+        
+    except Exception as e:
+        logger.error(f"❌ خطأ عام في التشغيل: {e}")
+        
+        # إرسال رسالة خطأ
+        try:
+            bot = Bot(token=TELEGRAM_BOT_TOKEN)
+            await bot.send_message(
+                chat_id=TELEGRAM_CHAT_ID,
+                text=f"❌ خطأ في تقرير الأسهم:\n{str(e)}"
+            )
+            await bot.session.close()
+        except:
+            pass
+        
         sys.exit(1)
 
-# الأسهم الأمريكية المطلوبة
-STOCKS = [
-    # أسهم التكنولوجيا الكبيرة (Big Tech)
-    {"symbol": "AAPL", "name": "Apple Inc", "sector": "Technology"},
-    {"symbol": "MSFT", "name": "Microsoft Corporation", "sector": "Technology"},
-    {"symbol": "GOOGL", "name": "Alphabet Inc", "sector": "Technology"},
-    {"symbol": "AMZN", "name": "Amazon.com Inc", "sector": "E-commerce"},
-    {"symbol": "TSLA", "name": "Tesla Inc", "sector": "Electric Vehicles"},
-    {"symbol": "META", "name": "Meta Platforms Inc", "sector": "Social Media"},
-    {"symbol": "NVDA", "name": "NVIDIA Corporation", "sector": "Semiconductors"},
-    {"symbol": "NFLX", "name": "Netflix Inc", "sector": "Streaming"},
-    
-    # البنوك والخدمات المالية
-    {"symbol": "JPM", "name": "JPMorgan Chase & Co", "sector": "Banking"},
-    {"symbol": "BAC", "name": "Bank of America Corp", "sector": "Banking"},
-    {"symbol": "WFC", "name": "Wells Fargo & Company", "sector": "Banking"},
-    {"symbol": "GS", "name": "Goldman Sachs Group Inc", "sector": "Investment Banking"},
-    {"symbol": "MS", "name": "Morgan Stanley", "sector": "Investment Banking"},
-    {"symbol": "V", "name": "Visa Inc", "sector": "Payment Systems"},
-    {"symbol": "MA", "name": "Mastercard Inc", "sector": "Payment Systems"},
-    
-    # الرعاية الصحية والأدوية
-    {"symbol": "JNJ", "name": "Johnson & Johnson", "sector": "Healthcare"},
-    {"symbol": "PFE", "name": "Pfizer Inc", "sector": "Pharmaceuticals"},
-    {"symbol": "UNH", "name": "UnitedHealth Group Inc", "sector": "Health Insurance"},
-    {"symbol": "ABBV", "name": "AbbVie Inc", "sector": "Pharmaceuticals"},
-    {"symbol": "MRK", "name": "Merck & Co Inc", "sector": "Pharmaceuticals"},
-    
-    # الطاقة والنفط
-    {"symbol": "XOM", "name": "Exxon Mobil Corporation", "sector": "Oil & Gas"},
-    {"symbol": "CVX", "name": "Chevron Corporation", "sector": "Oil & Gas"},
-    {"symbol": "COP", "name": "ConocoPhillips", "sector": "Oil & Gas"},
-    
-    # السلع الاستهلاكية
-    {"symbol": "PG", "name": "Procter & Gamble Co", "sector": "Consumer Goods"},
-    {"symbol": "KO", "name": "Coca-Cola Company", "sector": "Beverages"},
-    {"symbol": "PEP", "name": "PepsiCo Inc", "sector": "Beverages"},
-    {"symbol": "WMT", "name": "Walmart Inc", "sector": "Retail"},
-    {"symbol": "HD", "name": "Home Depot Inc", "sector": "Retail"},
-    
+if __name__ == "__main__":
+    asyncio.run(main())
     # الصناعات والطيران
     {"symbol": "BA", "name": "Boeing Company", "sector": "Aerospace"},
     {"symbol": "CAT", "name": "Caterpillar Inc", "sector": "Heavy Machinery"},
