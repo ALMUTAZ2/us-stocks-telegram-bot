@@ -1,78 +1,44 @@
 name: US Stocks Monthly Report
 
 on:
+  workflow_dispatch:
   schedule:
-    # كل يوم أول من الشهر الساعة 3:00 صباحاً UTC
-    - cron: '0 3 1 * *'
-  workflow_dispatch: # للتشغيل اليدوي من GitHub
+    - cron: '0 21 * * 0'  # كل أحد الساعة 9 مساءً بتوقيت الرياض
 
 jobs:
   stocks-report:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # مهلة زمنية 2 ساعة
     
     steps:
-    - name: 📥 Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: 🐍 Set up Python
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
         
-    - name: 🌐 Install Chrome Browser
+    - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y wget gnupg unzip
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
         
-        # إضافة مفتاح Google Chrome
-        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-        
-        # إضافة مستودع Chrome
-        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-        
-        # تثبيت Chrome
-        sudo apt-get update
-        sudo apt-get install -y google-chrome-stable
-        
-        # التحقق من الإصدار
-        google-chrome --version
-        
-    - name: 📦 Install Python dependencies
-      run: |
-        pip install --upgrade pip
-        pip install selenium==4.15.2
-        pip install aiogram==3.2.0
-        pip install asyncio
-        
-    - name: 🔧 Setup Chrome WebDriver
-      run: |
-        # تحميل ChromeDriver
-        CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
-        echo "Chrome version: $CHROME_VERSION"
-        
-        # تحميل ChromeDriver المتوافق
-        wget -O chromedriver.zip "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}/chromedriver_linux64.zip"
-        unzip chromedriver.zip
-        sudo mv chromedriver /usr/local/bin/
-        sudo chmod +x /usr/local/bin/chromedriver
-        
-        # التحقق من ChromeDriver
-        chromedriver --version
-        
-    - name: 🚀 Run US Stocks Report
+    - name: Run stocks report
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       run: |
-        echo "🇺🇸 Starting US Stocks Monthly Report..."
-        python stocks_report.py
+        python main.py
         
-    - name: 📊 Upload logs (if failed)
-      if: failure()
-      uses: actions/upload-artifact@v3
+    # ✅ تحديث إلى v4 بدلاً من v3
+    - name: Upload report artifacts
+      uses: actions/upload-artifact@v4  # ← التحديث هنا
+      if: always()
       with:
-        name: error-logs
+        name: stocks-report
         path: |
-          *.log
           *.png
+          *.jpg
+          *.pdf
+          logs/
+        retention-days: 30
