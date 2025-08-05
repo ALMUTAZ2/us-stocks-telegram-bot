@@ -1,109 +1,80 @@
 import os
 import sys
-import asyncio
 import logging
 from datetime import datetime
-import yfinance as yf
-import pandas as pd
-from aiogram import Bot
-from aiogram.types import InputFile
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 # إعداد التسجيل
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# قراءة متغيرات البيئة
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-# التحقق من البيانات المطلوبة
-if not TELEGRAM_BOT_TOKEN:
-    logger.error("❌ TELEGRAM_BOT_TOKEN غير موجود!")
-    sys.exit(1)
-    
-if not TELEGRAM_CHAT_ID:
-    logger.error("❌ TELEGRAM_CHAT_ID غير موجود!")
-    sys.exit(1)
-
-logger.info("✅ تم تحميل بيانات تليجرام بنجاح")
-
-# قائمة الأسهم الأمريكية
-US_STOCKS = [
-    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA',
-    'META', 'NVDA', 'NFLX', 'AMD', 'INTC'
-]
-
-async def get_stock_data():
-    """جلب بيانات الأسهم"""
+def main():
+    """اختبار بسيط"""
     try:
-        logger.info("🔄 جاري جلب بيانات الأسهم...")
+        # التحقق من متغيرات البيئة
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
         
-        stock_data = []
-        for symbol in US_STOCKS:
-            try:
-                ticker = yf.Ticker(symbol)
-                info = ticker.info
-                hist = ticker.history(period="1mo")
-                
-                if not hist.empty:
-                    current_price = hist['Close'].iloc[-1]
-                    monthly_change = ((current_price - hist['Close'].iloc[0]) / hist['Close'].iloc[0]) * 100
-                    
-                    stock_data.append({
-                        'Symbol': symbol,
-                        'Name': info.get('longName', symbol),
-                        'Price': current_price,
-                        'Monthly_Change': monthly_change,
-                        'Market_Cap': info.get('marketCap', 0)
-                    })
-                    logger.info(f"✅ تم جلب بيانات {symbol}")
-                else:
-                    logger.warning(f"⚠️ لا توجد بيانات لـ {symbol}")
-                    
-            except Exception as e:
-                logger.error(f"❌ خطأ في جلب بيانات {symbol}: {e}")
-                continue
+        logger.info("🔍 فحص متغيرات البيئة...")
         
-        if not stock_data:
-            raise Exception("لم يتم جلب أي بيانات للأسهم")
+        if not bot_token:
+            logger.error("❌ TELEGRAM_BOT_TOKEN غير موجود!")
+            sys.exit(1)
             
-        logger.info(f"✅ تم جلب بيانات {len(stock_data)} سهم")
-        return pd.DataFrame(stock_data)
+        if not chat_id:
+            logger.error("❌ TELEGRAM_CHAT_ID غير موجود!")
+            sys.exit(1)
+            
+        logger.info(f"✅ Bot Token: {bot_token[:10]}...")
+        logger.info(f"✅ Chat ID: {chat_id}")
         
+        # اختبار استيراد المكتبات
+        logger.info("📦 اختبار المكتبات...")
+        
+        try:
+            import requests
+            logger.info("✅ requests")
+        except ImportError as e:
+            logger.error(f"❌ requests: {e}")
+            
+        try:
+            import pandas as pd
+            logger.info("✅ pandas")
+        except ImportError as e:
+            logger.error(f"❌ pandas: {e}")
+            
+        try:
+            import yfinance as yf
+            logger.info("✅ yfinance")
+        except ImportError as e:
+            logger.error(f"❌ yfinance: {e}")
+            
+        # اختبار إرسال رسالة بسيطة
+        logger.info("📤 اختبار إرسال رسالة تليجرام...")
+        
+        import requests
+        
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        data = {
+            'chat_id': chat_id,
+            'text': f'🧪 اختبار البوت\n⏰ الوقت: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n✅ البوت يعمل بنجاح!'
+        }
+        
+        response = requests.post(url, data=data, timeout=30)
+        
+        if response.status_code == 200:
+            logger.info("✅ تم إرسال الرسالة بنجاح!")
+            print("🎉 الاختبار نجح! البوت يعمل.")
+        else:
+            logger.error(f"❌ فشل الإرسال: {response.status_code}")
+            logger.error(f"Response: {response.text}")
+            sys.exit(1)
+            
     except Exception as e:
-        logger.error(f"❌ خطأ في جلب البيانات: {e}")
-        raise
+        logger.error(f"❌ خطأ عام: {e}")
+        sys.exit(1)
 
-def create_chart(df):
-    """إنشاء مخطط بياني"""
-    try:
-        logger.info("📊 جاري إنشاء المخطط البياني...")
-        
-        plt.style.use('dark_background')
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
-        
-        # مخطط الأداء الشهري
-        colors = ['green' if x > 0 else 'red' for x in df['Monthly_Change']]
-        ax1.bar(df['Symbol'], df['Monthly_Change'], color=colors, alpha=0.7)
-        ax1.set_title('الأداء الشهري للأسهم الأمريكية (%)', fontsize=16, pad=20)
-        ax1.set_ylabel('نسبة التغيير (%)')
-        ax1.grid(True, alpha=0.3)
-        ax1.axhline(y=0, color='white', linestyle='-', alpha=0.5)
-        
-        # مخطط الأسعار
-        ax2.bar(df['Symbol'], df['Price'], color='skyblue', alpha=0.7)
-        ax2.set_title('أسعار الأسهم الحالية ($)', fontsize=16, pad=20)
-        ax2.set_ylabel('السعر ($)')
-        ax2.set_xlabel('رمز السهم')
-        ax2.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        chart_path = 'stocks_chart.png'
+if __name__ == "__main__":
+    main()
         plt.savefig(chart_path, dpi=300, bbox_inches='tight', 
                    facecolor='black', edgecolor='none')
         plt.close()
