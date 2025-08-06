@@ -217,7 +217,13 @@ async def capture_tradingview_chart(stock_info, driver):
         # معالجة الرموز الخاصة (مثل BRK.A)
         clean_symbol = symbol.replace('.', '-')
         
-        url = f"https://www.tradingview.com/chart/?symbol={exchange}%3A{clean_symbol}&interval=1M&style=4&theme=dark"        logger.info(f"🌐 الذهاب إلى: {url}")
+        # بناء رابط TradingView الجديد مع الفريم الشهري والرينكو
+        url = f"https://www.tradingview.com/chart/?symbol={exchange}%3A{clean_symbol}&interval=1M&style=4&theme=dark"
+
+
+
+        
+        logger.info(f"🌐 الذهاب إلى: {url}")
         driver.get(url)
         
         # انتظار تحميل الصفحة
