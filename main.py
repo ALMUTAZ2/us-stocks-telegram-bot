@@ -211,7 +211,12 @@ async def capture_tradingview_chart(stock_info, driver):
     
     try:
         # بناء رابط TradingView مع الثيم الداكن للأسهم الأمريكية
-        url = f"https://www.tradingview.com/chart/?symbol=NASDAQ%3A{symbol}&interval=1M&style=4&theme=dark"
+
+# الجديد
+url = f"https://www.tradingview.com/symbols/{exchange}-{clean_symbol}?interval=1M&style=4&theme=dark"
+ 
+
+
         
         logger.info(f"🌐 الذهاب إلى: {url}")
         driver.get(url)
