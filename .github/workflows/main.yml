@@ -2,7 +2,7 @@ name: Monthly US Stocks Report
 
 on:
   schedule:
-    - cron: '0 3 1 * *'  # أول يوم من كل شهر الساعة 3 صباحاً UTC
+    - cron: '0 15 1 * *'  # أول يوم من كل شهر الساعة 3 صباحاً UTC
   workflow_dispatch:  # تشغيل يدوي
 
 jobs:
