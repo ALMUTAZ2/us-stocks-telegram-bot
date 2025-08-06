@@ -186,18 +186,6 @@ STOCKS = [
     {"symbol": "ICE", "name": "Intercontinental Exchange Inc.", "sector": "Finance"}
 ]
 
-
-
-
-
- 
-
-
-
-
-
-
-
 async def capture_tradingview_chart(stock_info, driver):
     """التقاط شارت من TradingView للأسهم الأمريكية"""
     symbol = stock_info["symbol"]
@@ -210,13 +198,27 @@ async def capture_tradingview_chart(stock_info, driver):
     logger.info(f"📈 معالجة {name} ({symbol})...")
     
     try:
-        # بناء رابط TradingView مع الثيم الداكن للأسهم الأمريكية
-
-# الجديد
-url = f"https://www.tradingview.com/symbols/{exchange}-{clean_symbol}?interval=1M&style=4&theme=dark"
- 
-
-
+        # تحديد البورصة بناءً على رمز السهم
+        nasdaq_symbols = [
+            'AAPL', 'MSFT', 'GOOG', 'GOOGL', 'AMZN', 'META', 'NVDA', 'NFLX', 
+            'ADBE', 'CRM', 'ORCL', 'CSCO', 'INTC', 'AMD', 'QCOM', 'AVGO', 
+            'TXN', 'COST', 'SBUX', 'PYPL', 'ZOOM', 'DOCU', 'PLTR', 'BABA',
+            'TMUS', 'INTU', 'NOW', 'UBER', 'BKNG', 'ISRG', 'SHOP', 'PDD',
+            'ANET', 'ARM', 'AMAT', 'PANW', 'CRWD', 'DASH', 'SPOT', 'APP',
+            'LRCX', 'MELI', 'MU', 'ADP', 'CMCSA', 'KLAC', 'SNPS', 'WELL'
+        ]
+        
+        # تحديد البورصة
+        if symbol in nasdaq_symbols:
+            exchange = "NASDAQ"
+        else:
+            exchange = "NYSE"
+        
+        # معالجة الرموز الخاصة (مثل BRK.A)
+        clean_symbol = symbol.replace('.', '-')
+        
+        # بناء رابط TradingView الجديد مع الفريم الشهري والرينكو
+        url = f"https://www.tradingview.com/symbols/{exchange}-{clean_symbol}?interval=1M&style=4&theme=dark"
         
         logger.info(f"🌐 الذهاب إلى: {url}")
         driver.get(url)
@@ -254,7 +256,7 @@ url = f"https://www.tradingview.com/symbols/{exchange}-{clean_symbol}?interval=1
             # إرسال رسالة نصية أولاً
             await bot.send_message(
                 chat_id=TELEGRAM_CHAT_ID,
-                text=f"📊 **شارت {name} ({symbol})**\n🏢 القطاع: {sector}\n🔗 TradingView\n📅 {time.strftime('%Y-%m-%d %H:%M UTC')}\n⏱️ وقت المعالجة: {format_duration(chart_duration)}",
+                text=f"📊 **شارت {name} ({symbol})**\n🏢 القطاع: {sector}\n🏛️ البورصة: {exchange}\n🔗 TradingView - رينكو شهري\n📅 {time.strftime('%Y-%m-%d %H:%M UTC')}\n⏱️ وقت المعالجة: {format_duration(chart_duration)}",
                 parse_mode="Markdown"
             )
             
@@ -262,7 +264,7 @@ url = f"https://www.tradingview.com/symbols/{exchange}-{clean_symbol}?interval=1
             await bot.send_photo(
                 chat_id=TELEGRAM_CHAT_ID,
                 photo=photo,
-                caption=f"📈 {name} ({symbol}) - {sector}"
+                caption=f"📈 {name} ({symbol}) - {sector} | {exchange}"
             )
             
             # حذف الملف
