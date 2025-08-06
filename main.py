@@ -218,8 +218,7 @@ async def capture_tradingview_chart(stock_info, driver):
         clean_symbol = symbol.replace('.', '-')
         
         # بناء رابط TradingView الجديد مع الفريم الشهري والرينكو
-        url = f"https://www.tradingview.com/symbols/{exchange}-{clean_symbol}?interval=1M&style=4&theme=dark"
-        
+        url = f"https://www.tradingview.com/chart/?symbol={exchange}%3A{clean_symbol}&interval=1M&style=4"        
         logger.info(f"🌐 الذهاب إلى: {url}")
         driver.get(url)
         
